@@ -964,7 +964,7 @@
         function sendArm() {
             if (!isConnected) return;
             setArmedUI(true);
-            const cmd = 'START';
+            const cmd = 'U';
             sendString(cmd);
             logToConsole('▶ Armed — Sent: ' + cmd, 'info');
             showToast('Robot Armed');
@@ -972,11 +972,11 @@
 
         function sendDisarm() {
             setArmedUI(false);
-            const cmd = 'STOP0';
+            const cmd = 'u';
             sendString(cmd);
             logToConsole('⏹ Disarmed — Sent: ' + cmd, 'info');
             showToast('Robot Disarmed');
-            currentCommand = 'S00000';
+            currentCommand = 'S';
         }
 
         // ——————— Joystick ———————
@@ -1002,59 +1002,32 @@
                 const angle = data.angle ? data.angle.degree : 0;
                 const distance = data.distance || 0;
 
-                // Normalize distance to 0–99
-                const maxDist = 60; // NippleJS max practical distance in px
-                const power = Math.min(Math.round((distance / maxDist) * 99), 99);
+                // 1. Calculate Speed (0-99)
+                const maxDist = 60;
+                let speed = Math.min(Math.round((distance / maxDist) * 99), 99);
 
-                // Determine direction and build the 6-char command string
-                // Forward/Back is determined by vertical component
-                // Left/Right is determined by horizontal component
+                // 2. Calculate Steer (0-99) using Cosine for X-axis
                 const rad = (angle * Math.PI) / 180;
-                const x = Math.cos(rad) * power; // +right / -left
-                const y = Math.sin(rad) * power; // +forward / -back
+                let steer = Math.min(Math.round(Math.abs(Math.cos(rad) * (distance / maxDist) * 99)), 99);
 
-                let dir, leftPower, rightPower;
+                // 3. Determine Directions
+                let dirY = (angle > 0 && angle < 180) ? 'F' : 'B';
+                let dirX = (Math.cos(rad) > 0) ? 'R' : 'L';
 
-                if (Math.abs(y) > Math.abs(x)) {
-                    // Mostly forward or backward
-                    dir = y > 0 ? 'F' : 'B';
-                    leftPower = Math.round(Math.abs(y));
-                    rightPower = Math.round(Math.abs(y));
-                    // Mix in turning
-                    if (x > 5) { rightPower = Math.max(0, rightPower - Math.round(Math.abs(x) * 0.5)); }
-                    if (x < -5) { leftPower = Math.max(0, leftPower - Math.round(Math.abs(x) * 0.5)); }
-                } else {
-                    // Mostly turning
-                    if (x > 0) {
-                        dir = 'F';
-                        leftPower = Math.round(Math.abs(x));
-                        rightPower = 0;
-                    } else {
-                        dir = 'F';
-                        leftPower = 0;
-                        rightPower = Math.round(Math.abs(x));
-                    }
-                }
+                // 4. Pad Zeros
+                const speedStr = String(speed).padStart(2, '0');
+                const steerStr = String(steer).padStart(2, '0');
 
-                // Clamp to 99
-                leftPower = Math.min(leftPower, 99);
-                rightPower = Math.min(rightPower, 99);
-
-                // Format:  F 50 R 10  →  "F50R10"
-                const lStr = String(leftPower).padStart(2, '0');
-                const rStr = String(rightPower).padStart(2, '0');
-                currentCommand = dir + lStr + 'R' + rStr;
-
+                currentCommand = dirY + speedStr + dirX + steerStr; // e.g. F50R10
                 joystickReadout.textContent = currentCommand;
             });
 
             joystickManager.on('end', () => {
                 joystickZone.classList.remove('active');
-                currentCommand = 'S00000';
+                currentCommand = 'S';
                 joystickReadout.textContent = 'IDLE';
-                // Immediately send stop
-                sendString('S00000');
-                logToConsole('Joystick released → S00000');
+                sendString('S');
+                logToConsole('Joystick released → S');
                 stopSending();
             });
         }
@@ -1062,7 +1035,7 @@
         function startSending() {
             if (sendInterval) return;
             sendInterval = setInterval(() => {
-                if (isConnected && isArmed && currentCommand !== 'S00000') {
+                if (isConnected && isArmed && currentCommand !== 'S') {
                     sendString(currentCommand);
                     logToConsole('→ ' + currentCommand);
                 }
@@ -1127,26 +1100,32 @@
                 const kp = parseFloat(document.getElementById('pid-kp').value).toFixed(1);
                 const ki = parseFloat(document.getElementById('pid-ki').value).toFixed(1);
                 const kd = parseFloat(document.getElementById('pid-kd').value).toFixed(2);
-                const cmd = `P${kp},${ki},${kd}`;
-                sendString(cmd);
-                logToConsole('⚙️ PID (Common) Sent: ' + cmd, 'info');
+
+                // Send individually to match Arduino logic
+                sendString(`P${kp}\n`);
+                setTimeout(() => sendString(`I${ki}\n`), 50);
+                setTimeout(() => sendString(`D${kd}\n`), 100);
+
+                logToConsole(`⚙️ PID Sent: P${kp}, I${ki}, D${kd}`, 'info');
                 showToast('Common PID sent');
             } else {
-                // Forward tilt PID
+                // Forward tilt PID — sent individually
                 const fKp = parseFloat(document.getElementById('pid-fwd-kp').value).toFixed(1);
                 const fKi = parseFloat(document.getElementById('pid-fwd-ki').value).toFixed(1);
                 const fKd = parseFloat(document.getElementById('pid-fwd-kd').value).toFixed(2);
-                const fCmd = `PF${fKp},${fKi},${fKd}`;
-                sendString(fCmd);
-                logToConsole('⚙️ PID (Forward) Sent: ' + fCmd, 'info');
+                sendString(`PF${fKp}\n`);
+                setTimeout(() => sendString(`IF${fKi}\n`), 50);
+                setTimeout(() => sendString(`DF${fKd}\n`), 100);
+                logToConsole(`⚙️ PID (Forward) Sent: P${fKp}, I${fKi}, D${fKd}`, 'info');
 
-                // Backward tilt recovery PID
+                // Backward tilt recovery PID — sent individually with offset delay
                 const bKp = parseFloat(document.getElementById('pid-bwd-kp').value).toFixed(1);
                 const bKi = parseFloat(document.getElementById('pid-bwd-ki').value).toFixed(1);
                 const bKd = parseFloat(document.getElementById('pid-bwd-kd').value).toFixed(2);
-                const bCmd = `PB${bKp},${bKi},${bKd}`;
-                sendString(bCmd);
-                logToConsole('⚙️ PID (Backward) Sent: ' + bCmd, 'info');
+                setTimeout(() => sendString(`PB${bKp}\n`), 200);
+                setTimeout(() => sendString(`IB${bKi}\n`), 250);
+                setTimeout(() => sendString(`DB${bKd}\n`), 300);
+                logToConsole(`⚙️ PID (Backward) Sent: P${bKp}, I${bKi}, D${bKd}`, 'info');
 
                 showToast('Forward & Backward PID sent');
             }
