@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BalanceBot Pro — Web Controller</title>
+    <meta name="description"
+        content="Control your BalanceBot_Pro self-balancing robot via Bluetooth from your browser." />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+
+    <!-- NippleJS (Virtual Joystick) -->
+    <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.2/dist/nipplejs.min.js"></script>
+
+    <style>
+        /* ===== CSS Reset & Variables ===== */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2035;
+            --bg-card-hover: #1f2847;
+            --neon-blue: #00d4ff;
+            --neon-blue-dim: #0098b8;
+            --neon-purple: #a855f7;
+            --neon-green: #22d65e;
+            --neon-red: #ff3b5c;
+            --neon-orange: #ff8c00;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #1e293b;
+            --glow-blue: 0 0 15px rgba(0, 212, 255, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
+            --glow-green: 0 0 15px rgba(34, 214, 94, 0.3);
+            --glow-red: 0 0 15px rgba(255, 59, 92, 0.3);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font-display: 'Orbitron', sans-serif;
+            --font-body: 'Inter', system-ui, sans-serif;
+            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html {
+            font-size: 16px;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ===== Animated Background ===== */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 0%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ===== Utility ===== */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ===== Header ===== */
+        .header {
+            padding: 28px 0 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 28px;
+        }
+
+        .header h1 {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 6px;
+            font-weight: 300;
+            letter-spacing: 0.5px;
+        }
+
+        /* ===== Grid Layout ===== */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .grid-full {
+            grid-column: 1 / -1;
+        }
+
+        /* ===== Cards ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 22px;
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+
+        .card:hover {
+            border-color: rgba(0, 212, 255, 0.25);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-family: var(--font-display);
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--neon-blue);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title .icon {
+            font-size: 1rem;
+        }
+
+        /* ===== Connection Panel ===== */
+        .connection-panel {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--neon-red);
+            box-shadow: var(--glow-red);
+            transition: all var(--transition);
+            flex-shrink: 0;
+        }
+
+        .status-indicator.connected {
+            background: var(--neon-green);
+            box-shadow: var(--glow-green);
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 8px rgba(34, 214, 94, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 20px rgba(34, 214, 94, 0.7);
+            }
+        }
+
+        .status-text {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            min-width: 120px;
+        }
+
+        .status-text.connected {
+            color: var(--neon-green);
+        }
+
+        /* ===== Buttons ===== */
+        .btn {
+            font-family: var(--font-body);
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 10px 22px;
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            outline: none;
+            user-select: none;
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn-connect {
+            background: linear-gradient(135deg, var(--neon-blue), #0088cc);
+            color: #fff;
+            border-color: var(--neon-blue);
+            box-shadow: var(--glow-blue);
+        }
+
+        .btn-connect:hover {
+            box-shadow: 0 0 22px rgba(0, 212, 255, 0.5);
+        }
+
+        .btn-disconnect {
+            background: transparent;
+            color: var(--neon-red);
+            border-color: var(--neon-red);
+        }
+
+        .btn-disconnect:hover {
+            background: rgba(255, 59, 92, 0.1);
+            box-shadow: var(--glow-red);
+        }
+
+        .btn-arm {
+            background: linear-gradient(135deg, var(--neon-green), #17a34a);
+            color: #fff;
+            border-color: var(--neon-green);
+            padding: 12px 32px;
+            font-size: 0.9rem;
+        }
+
+        .btn-arm:hover {
+            box-shadow: var(--glow-green);
+        }
+
+        .btn-disarm {
+            background: transparent;
+            color: var(--neon-orange);
+            border-color: var(--neon-orange);
+            padding: 12px 32px;
+            font-size: 0.9rem;
+        }
+
+        .btn-disarm:hover {
+            background: rgba(255, 140, 0, 0.1);
+        }
+
+        .btn-clear {
+            background: transparent;
+            color: var(--text-muted);
+            border-color: var(--border-color);
+            font-size: 0.72rem;
+            padding: 6px 14px;
+        }
+
+        .btn-clear:hover {
+            color: var(--text-secondary);
+            border-color: var(--text-muted);
+        }
+
+        .arm-controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== Joystick Zone ===== */
+        .joystick-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        #joystick-zone {
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--bg-card-hover) 0%, var(--bg-secondary) 100%);
+            border: 2px solid var(--border-color);
+            position: relative;
+            touch-action: none;
+            transition: border-color var(--transition);
+        }
+
+        #joystick-zone.active {
+            border-color: var(--neon-blue);
+            box-shadow: var(--glow-blue);
+        }
+
+        /* crosshair */
+        #joystick-zone::before,
+        #joystick-zone::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        #joystick-zone::before {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+            top: 0;
+        }
+
+        #joystick-zone::after {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+            left: 0;
+        }
+
+        .joystick-readout {
+            font-family: var(--font-display);
+            font-size: 0.75rem;
+            color: var(--neon-blue);
+            letter-spacing: 1px;
+            min-height: 20px;
+        }
+
+        /* ===== PID Sliders ===== */
+        .pid-group {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .pid-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pid-label {
+            font-family: var(--font-display);
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            width: 24px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--bg-secondary);
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--neon-blue);
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+            cursor: pointer;
+            transition: box-shadow var(--transition);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 16px rgba(0, 212, 255, 0.8);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--neon-blue);
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+            cursor: pointer;
+            border: none;
+        }
+
+        .pid-value {
+            font-family: var(--font-display);
+            font-size: 0.75rem;
+            color: var(--neon-blue);
+            width: 68px;
+            text-align: center;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 6px 8px;
+            outline: none;
+            transition: border-color var(--transition), box-shadow var(--transition);
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+
+        .pid-value:focus {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        .pid-value::-webkit-outer-spin-button,
+        .pid-value::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .pid-send-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 4px;
+        }
+
+        .btn-pid-send {
+            background: transparent;
+            color: var(--neon-purple);
+            border-color: var(--neon-purple);
+        }
+
+        .btn-pid-send:hover {
+            background: rgba(168, 85, 247, 0.1);
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+        }
+
+        /* ===== Console ===== */
+        .console-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #console-log {
+            width: 100%;
+            height: 160px;
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            color: var(--neon-green);
+            overflow-y: auto;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        #console-log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #console-log::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #console-log::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .console-entry {
+            opacity: 0;
+            animation: fadeIn 0.15s ease forwards;
+        }
+
+        .console-entry.error {
+            color: var(--neon-red);
+        }
+
+        .console-entry.info {
+            color: var(--neon-blue);
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* ===== Footer ===== */
+        .footer {
+            text-align: center;
+            padding: 24px 0;
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            #joystick-zone {
+                width: 200px;
+                height: 200px;
+            }
+
+            .connection-panel {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        /* ===== Notification Toast ===== */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--neon-blue);
+            border-radius: var(--radius-sm);
+            padding: 12px 20px;
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            box-shadow: var(--glow-blue);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.4s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            border-color: var(--neon-red);
+            box-shadow: var(--glow-red);
+        }
+
+        /* ===== Disabled States ===== */
+        .disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ===== Header ===== -->
+    <header class="header">
+        <h1>⚡ BalanceBot Pro</h1>
+        <p>Web Bluetooth Controller — HC-05 Serial Link</p>
+    </header>
+
+    <div class="container">
+
+        <!-- ===== Row 1: Connection + Arm/Disarm ===== -->
+        <div class="grid">
+            <div class="card" id="connection-card">
+                <div class="card-title"><span class="icon">📡</span> Connection</div>
+                <div class="connection-panel">
+                    <div class="status-indicator" id="status-dot"></div>
+                    <span class="status-text" id="status-text">Disconnected</span>
+                    <button class="btn btn-connect" id="btn-connect" onclick="handleConnect()">Connect</button>
+                    <button class="btn btn-disconnect" id="btn-disconnect" onclick="handleDisconnect()"
+                        style="display:none;">Disconnect</button>
+                </div>
+            </div>
+
+            <div class="card" id="arm-card">
+                <div class="card-title"><span class="icon">🤖</span> Robot Control</div>
+                <div class="arm-controls">
+                    <button class="btn btn-arm disabled" id="btn-arm" onclick="sendArm()">▶ Start</button>
+                    <button class="btn btn-disarm disabled" id="btn-disarm" onclick="sendDisarm()">⏹ Stop</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Row 2: Joystick + PID ===== -->
+        <div class="grid">
+            <div class="card">
+                <div class="card-title"><span class="icon">🕹️</span> Joystick</div>
+                <div class="joystick-wrapper">
+                    <div id="joystick-zone" class="disabled"></div>
+                    <div class="joystick-readout" id="joystick-readout">IDLE</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="icon">⚙️</span> PID Tuning</div>
+                <div class="pid-group">
+                    <div class="pid-slider-row">
+                        <span class="pid-label">Kp</span>
+                        <input type="range" id="pid-kp" min="0" max="100" step="0.1" value="15"
+                            oninput="onSliderChange('kp')">
+                        <input type="number" class="pid-value" id="pid-kp-val" min="0" max="100" step="0.1" value="15.0"
+                            oninput="onInputChange('kp')">
+                    </div>
+                    <div class="pid-slider-row">
+                        <span class="pid-label">Ki</span>
+                        <input type="range" id="pid-ki" min="0" max="100" step="0.1" value="1"
+                            oninput="onSliderChange('ki')">
+                        <input type="number" class="pid-value" id="pid-ki-val" min="0" max="100" step="0.1" value="1.0"
+                            oninput="onInputChange('ki')">
+                    </div>
+                    <div class="pid-slider-row">
+                        <span class="pid-label">Kd</span>
+                        <input type="range" id="pid-kd" min="0" max="10" step="0.01" value="0.5"
+                            oninput="onSliderChange('kd')">
+                        <input type="number" class="pid-value" id="pid-kd-val" min="0" max="10" step="0.01" value="0.50"
+                            oninput="onInputChange('kd')">
+                    </div>
+                    <div class="pid-send-row">
+                        <button class="btn btn-pid-send disabled" id="btn-pid-send" onclick="sendPID()">Send
+                            PID</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Row 3: Console ===== -->
+        <div class="grid">
+            <div class="card grid-full">
+                <div class="console-header">
+                    <div class="card-title"><span class="icon">📟</span> Command Console</div>
+                    <button class="btn btn-clear" onclick="clearConsole()">Clear</button>
+                </div>
+                <div id="console-log"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        BalanceBot Pro &copy; 2026 &mdash; Kalinga Project &middot; Web Bluetooth Interface
+    </footer>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ===== JavaScript ===== -->
+    <script>
+        // ——————— State ———————
+        let bluetoothDevice = null;
+        let btCharacteristic = null;
+        let isConnected = false;
+        let isArmed = false;
+        let joystickManager = null;
+        let sendInterval = null;
+        let currentCommand = 'S00000'; // stop/idle
+
+        // HC-05 Bluetooth Classic → SPP UUID (Serial Port Profile)
+        const SPP_SERVICE_UUID = '00001101-0000-1000-8000-00805f9b34fb';
+        // Fallback: many HC-05 modules expose a custom serial-like GATT service
+        // Try these common UUIDs if SPP does not work
+        const SERIAL_SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
+        const SERIAL_CHAR_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+        // ——————— DOM References ———————
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const btnConnect = document.getElementById('btn-connect');
+        const btnDisconnect = document.getElementById('btn-disconnect');
+        const btnArm = document.getElementById('btn-arm');
+        const btnDisarm = document.getElementById('btn-disarm');
+        const btnPidSend = document.getElementById('btn-pid-send');
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickReadout = document.getElementById('joystick-readout');
+        const consoleLog = document.getElementById('console-log');
+
+        // ——————— Console Logging ———————
+        function logToConsole(msg, type = '') {
+            const entry = document.createElement('div');
+            entry.className = 'console-entry' + (type ? ' ' + type : '');
+            const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+            entry.textContent = `[${ts}] ${msg}`;
+            consoleLog.appendChild(entry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function clearConsole() {
+            consoleLog.innerHTML = '';
+        }
+
+        // ——————— Toast Notification ———————
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => { toast.className = 'toast'; }, 3000);
+        }
+
+        // ——————— UI State Management ———————
+        function setConnectedUI(connected) {
+            isConnected = connected;
+            statusDot.className = 'status-indicator' + (connected ? ' connected' : '');
+            statusText.className = 'status-text' + (connected ? ' connected' : '');
+            statusText.textContent = connected ? 'Connected' : 'Disconnected';
+            btnConnect.style.display = connected ? 'none' : '';
+            btnDisconnect.style.display = connected ? '' : 'none';
+
+            // Enable/disable controls
+            btnArm.classList.toggle('disabled', !connected);
+            btnDisarm.classList.toggle('disabled', !connected);
+            btnPidSend.classList.toggle('disabled', !connected);
+            joystickZone.classList.toggle('disabled', !connected);
+
+            if (!connected) {
+                setArmedUI(false);
+                stopSending();
+            }
+        }
+
+        function setArmedUI(armed) {
+            isArmed = armed;
+            btnArm.style.display = armed ? 'none' : '';
+            btnDisarm.style.display = armed ? '' : 'none';
+        }
+
+        // ——————— Bluetooth Connection ———————
+        async function handleConnect() {
+            if (!navigator.bluetooth) {
+                showToast('Web Bluetooth not supported in this browser!', true);
+                logToConsole('ERROR: Web Bluetooth API not available. Use Chrome or Edge.', 'error');
+                return;
+            }
+
+            logToConsole('Scanning for Bluetooth devices…', 'info');
+
+            try {
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    // Accept devices advertising the common HM-10 / HC-05 BLE service
+                    filters: [{ services: [SERIAL_SERVICE_UUID] }],
+                    // Or allow the user to pick any device:
+                    // acceptAllDevices: true,
+                    // optionalServices: [SERIAL_SERVICE_UUID],
+                });
+
+                logToConsole(`Device found: ${bluetoothDevice.name || 'Unknown'}`, 'info');
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                const server = await bluetoothDevice.gatt.connect();
+                logToConsole('GATT server connected', 'info');
+
+                const service = await server.getPrimaryService(SERIAL_SERVICE_UUID);
+                logToConsole('Serial service discovered', 'info');
+
+                btCharacteristic = await service.getCharacteristic(SERIAL_CHAR_UUID);
+                logToConsole('Serial characteristic ready ✓', 'info');
+
+                setConnectedUI(true);
+                showToast('Connected to ' + (bluetoothDevice.name || 'BalanceBot'));
+                logToConsole('✅ Connection established — ready to send commands', 'info');
+
+            } catch (err) {
+                logToConsole('Connection failed: ' + err.message, 'error');
+                showToast('Connection failed!', true);
+            }
+        }
+
+        function handleDisconnect() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+            onDisconnected();
+        }
+
+        function onDisconnected() {
+            logToConsole('🔴 Disconnected', 'error');
+            showToast('Disconnected');
+            setConnectedUI(false);
+            btCharacteristic = null;
+        }
+
+        // ——————— Send Data ———————
+        async function sendString(str) {
+            if (!btCharacteristic) return;
+            try {
+                const encoder = new TextEncoder();
+                await btCharacteristic.writeValueWithoutResponse(encoder.encode(str));
+            } catch (e) {
+                logToConsole('Send error: ' + e.message, 'error');
+            }
+        }
+
+        // ——————— Arm / Disarm ———————
+        function sendArm() {
+            if (!isConnected) return;
+            setArmedUI(true);
+            const cmd = 'START';
+            sendString(cmd);
+            logToConsole('▶ Armed — Sent: ' + cmd, 'info');
+            showToast('Robot Armed');
+        }
+
+        function sendDisarm() {
+            setArmedUI(false);
+            const cmd = 'STOP0';
+            sendString(cmd);
+            logToConsole('⏹ Disarmed — Sent: ' + cmd, 'info');
+            showToast('Robot Disarmed');
+            currentCommand = 'S00000';
+        }
+
+        // ——————— Joystick ———————
+        function initJoystick() {
+            joystickManager = nipplejs.create({
+                zone: joystickZone,
+                mode: 'static',
+                position: { left: '50%', top: '50%' },
+                color: '#00d4ff',
+                size: 120,
+                restOpacity: 0.7,
+                fadeTime: 100,
+            });
+
+            joystickManager.on('start', () => {
+                joystickZone.classList.add('active');
+                startSending();
+            });
+
+            joystickManager.on('move', (evt, data) => {
+                if (!isConnected || !isArmed) return;
+
+                const angle = data.angle ? data.angle.degree : 0;
+                const distance = data.distance || 0;
+
+                // Normalize distance to 0–99
+                const maxDist = 60; // NippleJS max practical distance in px
+                const power = Math.min(Math.round((distance / maxDist) * 99), 99);
+
+                // Determine direction and build the 6-char command string
+                // Forward/Back is determined by vertical component
+                // Left/Right is determined by horizontal component
+                const rad = (angle * Math.PI) / 180;
+                const x = Math.cos(rad) * power; // +right / -left
+                const y = Math.sin(rad) * power; // +forward / -back
+
+                let dir, leftPower, rightPower;
+
+                if (Math.abs(y) > Math.abs(x)) {
+                    // Mostly forward or backward
+                    dir = y > 0 ? 'F' : 'B';
+                    leftPower = Math.round(Math.abs(y));
+                    rightPower = Math.round(Math.abs(y));
+                    // Mix in turning
+                    if (x > 5) { rightPower = Math.max(0, rightPower - Math.round(Math.abs(x) * 0.5)); }
+                    if (x < -5) { leftPower = Math.max(0, leftPower - Math.round(Math.abs(x) * 0.5)); }
+                } else {
+                    // Mostly turning
+                    if (x > 0) {
+                        dir = 'F';
+                        leftPower = Math.round(Math.abs(x));
+                        rightPower = 0;
+                    } else {
+                        dir = 'F';
+                        leftPower = 0;
+                        rightPower = Math.round(Math.abs(x));
+                    }
+                }
+
+                // Clamp to 99
+                leftPower = Math.min(leftPower, 99);
+                rightPower = Math.min(rightPower, 99);
+
+                // Format:  F 50 R 10  →  "F50R10"
+                const lStr = String(leftPower).padStart(2, '0');
+                const rStr = String(rightPower).padStart(2, '0');
+                currentCommand = dir + lStr + 'R' + rStr;
+
+                joystickReadout.textContent = currentCommand;
+            });
+
+            joystickManager.on('end', () => {
+                joystickZone.classList.remove('active');
+                currentCommand = 'S00000';
+                joystickReadout.textContent = 'IDLE';
+                // Immediately send stop
+                sendString('S00000');
+                logToConsole('Joystick released → S00000');
+                stopSending();
+            });
+        }
+
+        function startSending() {
+            if (sendInterval) return;
+            sendInterval = setInterval(() => {
+                if (isConnected && isArmed && currentCommand !== 'S00000') {
+                    sendString(currentCommand);
+                    logToConsole('→ ' + currentCommand);
+                }
+            }, 50); // 50ms = 20Hz
+        }
+
+        function stopSending() {
+            if (sendInterval) {
+                clearInterval(sendInterval);
+                sendInterval = null;
+            }
+        }
+
+        // ——————— PID ———————
+        const pidConfig = {
+            kp: { slider: 'pid-kp', input: 'pid-kp-val', decimals: 1, min: 0, max: 100 },
+            ki: { slider: 'pid-ki', input: 'pid-ki-val', decimals: 1, min: 0, max: 100 },
+            kd: { slider: 'pid-kd', input: 'pid-kd-val', decimals: 2, min: 0, max: 10 },
+        };
+
+        // Slider → Input sync
+        function onSliderChange(param) {
+            const cfg = pidConfig[param];
+            const val = parseFloat(document.getElementById(cfg.slider).value);
+            document.getElementById(cfg.input).value = val.toFixed(cfg.decimals);
+        }
+
+        // Input → Slider sync (with clamping)
+        function onInputChange(param) {
+            const cfg = pidConfig[param];
+            let val = parseFloat(document.getElementById(cfg.input).value);
+            if (isNaN(val)) return;
+            val = Math.max(cfg.min, Math.min(cfg.max, val));
+            document.getElementById(cfg.slider).value = val;
+        }
+
+        function sendPID() {
+            if (!isConnected) return;
+            const kp = parseFloat(document.getElementById('pid-kp').value).toFixed(1);
+            const ki = parseFloat(document.getElementById('pid-ki').value).toFixed(1);
+            const kd = parseFloat(document.getElementById('pid-kd').value).toFixed(2);
+            const cmd = `P${kp},${ki},${kd}`;
+            sendString(cmd);
+            logToConsole('⚙️ PID Sent: ' + cmd, 'info');
+            showToast('PID values sent');
+        }
+
+        // ——————— Initialise ———————
+        document.addEventListener('DOMContentLoaded', () => {
+            initJoystick();
+            logToConsole('BalanceBot Pro Web Controller initialized', 'info');
+            logToConsole('Browser: ' + navigator.userAgent.split(' ').pop(), 'info');
+            if (!navigator.bluetooth) {
+                logToConsole('⚠ Web Bluetooth API NOT available — use Chrome or Edge', 'error');
+            } else {
+                logToConsole('✓ Web Bluetooth API available', 'info');
+            }
+        });
+    </script>
+</body>
+
+</html>
