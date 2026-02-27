@@ -447,6 +447,81 @@
             box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
         }
 
+        /* ===== PID Mode Toggle ===== */
+        .pid-mode-toggle {
+            display: flex;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            padding: 3px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .pid-mode-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: var(--font-display);
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all var(--transition);
+            outline: none;
+        }
+
+        .pid-mode-btn.active {
+            background: rgba(0, 212, 255, 0.15);
+            color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
+        }
+
+        .pid-mode-btn:hover:not(.active) {
+            color: var(--text-secondary);
+        }
+
+        .pid-section {
+            display: none;
+        }
+
+        .pid-section.active {
+            display: block;
+        }
+
+        .pid-sub-label {
+            font-family: var(--font-display);
+            font-size: 0.58rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .pid-sub-label.forward {
+            color: var(--neon-green);
+            background: rgba(34, 214, 94, 0.08);
+            border: 1px solid rgba(34, 214, 94, 0.2);
+        }
+
+        .pid-sub-label.backward {
+            color: var(--neon-orange);
+            background: rgba(255, 140, 0, 0.08);
+            border: 1px solid rgba(255, 140, 0, 0.2);
+        }
+
+        .pid-separator {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 16px 0;
+        }
+
         /* ===== Console ===== */
         .console-header {
             display: flex;
@@ -614,30 +689,104 @@
 
             <div class="card">
                 <div class="card-title"><span class="icon">⚙️</span> PID Tuning</div>
-                <div class="pid-group">
-                    <div class="pid-slider-row">
-                        <span class="pid-label">Kp</span>
-                        <input type="range" id="pid-kp" min="0" max="100" step="0.1" value="15"
-                            oninput="onSliderChange('kp')">
-                        <input type="number" class="pid-value" id="pid-kp-val" min="0" max="100" step="0.1" value="15.0"
-                            oninput="onInputChange('kp')">
+
+                <!-- Mode Toggle -->
+                <div class="pid-mode-toggle">
+                    <button class="pid-mode-btn active" id="btn-mode-common"
+                        onclick="setPidMode('common')">Common</button>
+                    <button class="pid-mode-btn" id="btn-mode-separate"
+                        onclick="setPidMode('separate')">Separate</button>
+                </div>
+
+                <!-- ===== Common Tuning ===== -->
+                <div class="pid-section active" id="pid-common">
+                    <div class="pid-group">
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Kp</span>
+                            <input type="range" id="pid-kp" min="0" max="100" step="0.1" value="15"
+                                oninput="onSliderChange('kp')">
+                            <input type="number" class="pid-value" id="pid-kp-val" min="0" max="100" step="0.1"
+                                value="15.0" oninput="onInputChange('kp')">
+                        </div>
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Ki</span>
+                            <input type="range" id="pid-ki" min="0" max="100" step="0.1" value="1"
+                                oninput="onSliderChange('ki')">
+                            <input type="number" class="pid-value" id="pid-ki-val" min="0" max="100" step="0.1"
+                                value="1.0" oninput="onInputChange('ki')">
+                        </div>
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Kd</span>
+                            <input type="range" id="pid-kd" min="0" max="10" step="0.01" value="0.5"
+                                oninput="onSliderChange('kd')">
+                            <input type="number" class="pid-value" id="pid-kd-val" min="0" max="10" step="0.01"
+                                value="0.50" oninput="onInputChange('kd')">
+                        </div>
+                        <div class="pid-send-row">
+                            <button class="btn btn-pid-send disabled" id="btn-pid-send-common" onclick="sendPID()">Send
+                                PID</button>
+                        </div>
                     </div>
-                    <div class="pid-slider-row">
-                        <span class="pid-label">Ki</span>
-                        <input type="range" id="pid-ki" min="0" max="100" step="0.1" value="1"
-                            oninput="onSliderChange('ki')">
-                        <input type="number" class="pid-value" id="pid-ki-val" min="0" max="100" step="0.1" value="1.0"
-                            oninput="onInputChange('ki')">
+                </div>
+
+                <!-- ===== Separate Tuning ===== -->
+                <div class="pid-section" id="pid-separate">
+                    <!-- Forward Tilt -->
+                    <div class="pid-sub-label forward">▲ Forward Tilt</div>
+                    <div class="pid-group">
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Kp</span>
+                            <input type="range" id="pid-fwd-kp" min="0" max="100" step="0.1" value="15"
+                                oninput="onSliderChange('fwd-kp')">
+                            <input type="number" class="pid-value" id="pid-fwd-kp-val" min="0" max="100" step="0.1"
+                                value="15.0" oninput="onInputChange('fwd-kp')">
+                        </div>
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Ki</span>
+                            <input type="range" id="pid-fwd-ki" min="0" max="100" step="0.1" value="1"
+                                oninput="onSliderChange('fwd-ki')">
+                            <input type="number" class="pid-value" id="pid-fwd-ki-val" min="0" max="100" step="0.1"
+                                value="1.0" oninput="onInputChange('fwd-ki')">
+                        </div>
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Kd</span>
+                            <input type="range" id="pid-fwd-kd" min="0" max="10" step="0.01" value="0.5"
+                                oninput="onSliderChange('fwd-kd')">
+                            <input type="number" class="pid-value" id="pid-fwd-kd-val" min="0" max="10" step="0.01"
+                                value="0.50" oninput="onInputChange('fwd-kd')">
+                        </div>
                     </div>
-                    <div class="pid-slider-row">
-                        <span class="pid-label">Kd</span>
-                        <input type="range" id="pid-kd" min="0" max="10" step="0.01" value="0.5"
-                            oninput="onSliderChange('kd')">
-                        <input type="number" class="pid-value" id="pid-kd-val" min="0" max="10" step="0.01" value="0.50"
-                            oninput="onInputChange('kd')">
+
+                    <hr class="pid-separator">
+
+                    <!-- Backward Tilt -->
+                    <div class="pid-sub-label backward">▼ Backward Tilt Recovery</div>
+                    <div class="pid-group">
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Kp</span>
+                            <input type="range" id="pid-bwd-kp" min="0" max="100" step="0.1" value="15"
+                                oninput="onSliderChange('bwd-kp')">
+                            <input type="number" class="pid-value" id="pid-bwd-kp-val" min="0" max="100" step="0.1"
+                                value="15.0" oninput="onInputChange('bwd-kp')">
+                        </div>
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Ki</span>
+                            <input type="range" id="pid-bwd-ki" min="0" max="100" step="0.1" value="1"
+                                oninput="onSliderChange('bwd-ki')">
+                            <input type="number" class="pid-value" id="pid-bwd-ki-val" min="0" max="100" step="0.1"
+                                value="1.0" oninput="onInputChange('bwd-ki')">
+                        </div>
+                        <div class="pid-slider-row">
+                            <span class="pid-label">Kd</span>
+                            <input type="range" id="pid-bwd-kd" min="0" max="10" step="0.01" value="0.5"
+                                oninput="onSliderChange('bwd-kd')">
+                            <input type="number" class="pid-value" id="pid-bwd-kd-val" min="0" max="10" step="0.01"
+                                value="0.50" oninput="onInputChange('bwd-kd')">
+                        </div>
                     </div>
+
                     <div class="pid-send-row">
-                        <button class="btn btn-pid-send disabled" id="btn-pid-send" onclick="sendPID()">Send
+                        <button class="btn btn-pid-send disabled" id="btn-pid-send-separate" onclick="sendPID()">Send
                             PID</button>
                     </div>
                 </div>
@@ -690,7 +839,7 @@
         const btnDisconnect = document.getElementById('btn-disconnect');
         const btnArm = document.getElementById('btn-arm');
         const btnDisarm = document.getElementById('btn-disarm');
-        const btnPidSend = document.getElementById('btn-pid-send');
+        // PID send buttons managed by updatePidSendButtons()
         const joystickZone = document.getElementById('joystick-zone');
         const joystickReadout = document.getElementById('joystick-readout');
         const consoleLog = document.getElementById('console-log');
@@ -729,7 +878,7 @@
             // Enable/disable controls
             btnArm.classList.toggle('disabled', !connected);
             btnDisarm.classList.toggle('disabled', !connected);
-            btnPidSend.classList.toggle('disabled', !connected);
+            updatePidSendButtons(connected);
             joystickZone.classList.toggle('disabled', !connected);
 
             if (!connected) {
@@ -928,11 +1077,32 @@
         }
 
         // ——————— PID ———————
+        let pidMode = 'common'; // 'common' or 'separate'
+
         const pidConfig = {
+            // Common
             kp: { slider: 'pid-kp', input: 'pid-kp-val', decimals: 1, min: 0, max: 100 },
             ki: { slider: 'pid-ki', input: 'pid-ki-val', decimals: 1, min: 0, max: 100 },
             kd: { slider: 'pid-kd', input: 'pid-kd-val', decimals: 2, min: 0, max: 10 },
+            // Forward
+            'fwd-kp': { slider: 'pid-fwd-kp', input: 'pid-fwd-kp-val', decimals: 1, min: 0, max: 100 },
+            'fwd-ki': { slider: 'pid-fwd-ki', input: 'pid-fwd-ki-val', decimals: 1, min: 0, max: 100 },
+            'fwd-kd': { slider: 'pid-fwd-kd', input: 'pid-fwd-kd-val', decimals: 2, min: 0, max: 10 },
+            // Backward
+            'bwd-kp': { slider: 'pid-bwd-kp', input: 'pid-bwd-kp-val', decimals: 1, min: 0, max: 100 },
+            'bwd-ki': { slider: 'pid-bwd-ki', input: 'pid-bwd-ki-val', decimals: 1, min: 0, max: 100 },
+            'bwd-kd': { slider: 'pid-bwd-kd', input: 'pid-bwd-kd-val', decimals: 2, min: 0, max: 10 },
         };
+
+        // Mode toggle
+        function setPidMode(mode) {
+            pidMode = mode;
+            document.getElementById('btn-mode-common').classList.toggle('active', mode === 'common');
+            document.getElementById('btn-mode-separate').classList.toggle('active', mode === 'separate');
+            document.getElementById('pid-common').classList.toggle('active', mode === 'common');
+            document.getElementById('pid-separate').classList.toggle('active', mode === 'separate');
+            logToConsole('PID mode: ' + (mode === 'common' ? 'Common Tuning' : 'Separate Tuning (Fwd/Bwd)'), 'info');
+        }
 
         // Slider → Input sync
         function onSliderChange(param) {
@@ -952,13 +1122,40 @@
 
         function sendPID() {
             if (!isConnected) return;
-            const kp = parseFloat(document.getElementById('pid-kp').value).toFixed(1);
-            const ki = parseFloat(document.getElementById('pid-ki').value).toFixed(1);
-            const kd = parseFloat(document.getElementById('pid-kd').value).toFixed(2);
-            const cmd = `P${kp},${ki},${kd}`;
-            sendString(cmd);
-            logToConsole('⚙️ PID Sent: ' + cmd, 'info');
-            showToast('PID values sent');
+
+            if (pidMode === 'common') {
+                const kp = parseFloat(document.getElementById('pid-kp').value).toFixed(1);
+                const ki = parseFloat(document.getElementById('pid-ki').value).toFixed(1);
+                const kd = parseFloat(document.getElementById('pid-kd').value).toFixed(2);
+                const cmd = `P${kp},${ki},${kd}`;
+                sendString(cmd);
+                logToConsole('⚙️ PID (Common) Sent: ' + cmd, 'info');
+                showToast('Common PID sent');
+            } else {
+                // Forward tilt PID
+                const fKp = parseFloat(document.getElementById('pid-fwd-kp').value).toFixed(1);
+                const fKi = parseFloat(document.getElementById('pid-fwd-ki').value).toFixed(1);
+                const fKd = parseFloat(document.getElementById('pid-fwd-kd').value).toFixed(2);
+                const fCmd = `PF${fKp},${fKi},${fKd}`;
+                sendString(fCmd);
+                logToConsole('⚙️ PID (Forward) Sent: ' + fCmd, 'info');
+
+                // Backward tilt recovery PID
+                const bKp = parseFloat(document.getElementById('pid-bwd-kp').value).toFixed(1);
+                const bKi = parseFloat(document.getElementById('pid-bwd-ki').value).toFixed(1);
+                const bKd = parseFloat(document.getElementById('pid-bwd-kd').value).toFixed(2);
+                const bCmd = `PB${bKp},${bKi},${bKd}`;
+                sendString(bCmd);
+                logToConsole('⚙️ PID (Backward) Sent: ' + bCmd, 'info');
+
+                showToast('Forward & Backward PID sent');
+            }
+        }
+
+        // Enable/disable all PID send buttons
+        function updatePidSendButtons(enabled) {
+            document.getElementById('btn-pid-send-common').classList.toggle('disabled', !enabled);
+            document.getElementById('btn-pid-send-separate').classList.toggle('disabled', !enabled);
         }
 
         // ——————— Initialise ———————
